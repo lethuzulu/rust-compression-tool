@@ -95,9 +95,8 @@ fn read_file(config: &Config) -> Result<String, Error> {
     Ok(contents)
 }
 
-fn generate_frequency_table(string: String) -> HashMap<char, i32> {
+fn generate_frequency_table(string: &String) -> HashMap<char, i32> {
     let mut frequency_table: HashMap<char, i32> = HashMap::new();
-
     for char in string.chars() {
         let entry = frequency_table.entry(char);
         let value = entry.or_insert(0);
@@ -133,41 +132,22 @@ fn generate_huffman(frequency_table: HashMap<char, i32>) -> Option<HuffmanTree> 
     huffman_tree
 }
 
-// fn generate_huffman_code(huffman_tree: HuffmanTree, ) {
-//     let prefix = String::new();
-//     let mut codes: BTreeMap<char, String> = BTreeMap::new();
-
-//     match huffman_tree {
-//         HuffmanTree::LeafNode { element, .. } => {
-//             codes.insert(*element, prefix);
-//         }
-//         HuffmanTree::InternalNode {
-//             weight,
-//             right,
-//             left,
-//         } => {
-//             generate_huffman_code(left, prefix.clone() + "0", codes);
-//             generate_huffman_code(right, prefix + "1", codes);
-//         }
-//     }
-// }
-
 fn generate_huffman_code(
-    huffman_tree: HuffmanTree,
-    codes: &mut BTreeMap<char, String>,
+    huffman_tree: &HuffmanTree,
+    encoding_table: &mut BTreeMap<char, String>,
     prefix: String,
 ) {
     match huffman_tree {
         HuffmanTree::LeafNode { weight, element } => {
-            codes.insert(element, prefix);
+            encoding_table.insert(*element, prefix);
         }
         HuffmanTree::InternalNode {
             weight,
             right,
             left,
         } => {
-            generate_huffman_code(*left, prefix.clone() + "0");
-            generate_huffman_code(*right, prefix + "1");
+            generate_huffman_code(&left, encoding_table, prefix.clone() + "0");
+            generate_huffman_code(&right, encoding_table, prefix + "1");
         }
     }
 }
@@ -180,17 +160,17 @@ fn main() {
         std::process::exit(1)
     });
 
-    let string = read_file(&config).unwrap_or_else(|err| {
+    let input_string = read_file(&config).unwrap_or_else(|err| {
         println!("{:?}", err);
         std::process::exit(1)
     });
 
-    let frequency_table = generate_frequency_table(string);
+    let frequency_table = generate_frequency_table(&input_string);
 
     let huffman_tree = generate_huffman(frequency_table).unwrap();
 
-    let mut codes: BTreeMap<char, String> = BTreeMap::new();
-    generate_huffman_code(huffman_tree, &mut codes, String::new());
+    let mut encoding_table: BTreeMap<char, String> = BTreeMap::new();
+    generate_huffman_code(&huffman_tree, &mut encoding_table, String::new());
     // println!("{:?}", codes);
 
     // let huffman_tree = heap.pop().unwrap();
