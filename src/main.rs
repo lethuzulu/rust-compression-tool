@@ -150,6 +150,65 @@ fn generate_huffman_code(
     }
 }
 
+fn encode_text(string: &String, encoding_table: &BTreeMap<char, String>) -> String {
+    let mut encoded_string = String::new();
+
+    for char in string.chars() {
+        let s = encoding_table.get(&char).unwrap();
+        encoded_string.push_str(s);
+    }
+    encoded_string
+}
+
+fn pack_bits(bit_str: &str) -> Vec<u8> {
+    // Calculate the number of bytes needed
+    let num_bytes = (bit_str.len() + 7) / 8;
+
+    // Initialize a vector to store the bytes
+    let mut bytes = vec![0u8; num_bytes];
+
+    // Iterate over the bit string and fill the bytes vector
+    for (i, c) in bit_str.chars().enumerate() {
+        if c == '1' {
+            // Determine the byte index and bit position within the byte
+            let byte_index = i / 8;
+            let bit_position = 7 - (i % 8);
+            bytes[byte_index] |= 1 << bit_position;
+        }
+    }
+    bytes
+}
+
+fn unpack_bits(packed_bytes: &[u8]) -> Vec<u8> {
+    // This will hold the unpacked bytes
+    let mut unpacked_bytes = Vec::new();
+
+    // Calculate the total number of bits to process
+    let total_bits = packed_bytes.len() * 8;
+
+    // Iterate over all bits in packed bytes
+    for bit_pos in 0..total_bits {
+        // Determine the index of the byte and bit position within that byte
+        let byte_index = bit_pos / 8;
+        let bit_index = bit_pos % 8;
+
+        // Extract the bit from the packed bytes
+        let bit = (packed_bytes[byte_index] >> (7 - bit_index)) & 1;
+
+        // Append the bit to the appropriate byte in unpacked_bytes
+        if bit_pos % 8 == 0 {
+            // Start a new byte if necessary
+            unpacked_bytes.push(0);
+        }
+
+        // Calculate the position within the current byte in unpacked_bytes
+        let unpacked_byte_index = unpacked_bytes.len() - 1;
+        unpacked_bytes[unpacked_byte_index] |= bit << (7 - (bit_pos % 8));
+    }
+
+    unpacked_bytes
+}
+
 fn main() {
     let args: Vec<String> = args().collect();
 
@@ -169,13 +228,14 @@ fn main() {
 
     let mut encoding_table: BTreeMap<char, String> = BTreeMap::new();
     generate_huffman_code(&huffman_tree, &mut encoding_table, String::new());
-    // println!("{:?}", codes);
+    println!("encoding table  {:?}", encoding_table);
 
-    // let huffman_tree = heap.pop().unwrap();
-    // let mut codes: BTreeMap<char, String> = BTreeMap::new();
-    // let prefix = String::new();
+    let encoded_text = encode_text(&input_string, &encoding_table);
+    println!("encoded text  {:?}", encoded_text);
 
-    // generate_huffman_code(&huffman_tree, prefix, &mut codes);
+    let packed_bits: &[u8] = &pack_bits(&encoded_text);
+    println!("packed bits {:?}", packed_bits);
 
-    // println!("{:?}", codes);
+    let up = unpack_bits(packed_bits);
+    println!("unpacked bits {:?}", up);
 }
