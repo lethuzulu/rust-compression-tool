@@ -83,9 +83,7 @@ impl PartialEq for HuffmanTree {
 
 impl Eq for HuffmanTree {}
 
-fn read_file(config: &Config) -> Result<String, Error> {
-    let input = &config.input;
-
+fn read_file(input: &String) -> Result<String, Error> {
     let input_path = Path::new(input);
     let mut file = OpenOptions::new().read(true).open(input_path)?;
 
@@ -160,7 +158,7 @@ fn main() {
         std::process::exit(1)
     });
 
-    let input_string = read_file(&config).unwrap_or_else(|err| {
+    let input_string = read_file(&config.input).unwrap_or_else(|err| {
         println!("{:?}", err);
         std::process::exit(1)
     });
