@@ -105,7 +105,7 @@ fn generate_frequency_table(string: &String) -> HashMap<char, i32> {
     frequency_table
 }
 
-fn generate_huffman_tree(binary_heap: &mut BinaryHeap<HuffmanTree>) {
+fn build_tree(binary_heap: &mut BinaryHeap<HuffmanTree>) {
     while binary_heap.len() > 1 {
         let right_node = binary_heap.pop().unwrap();
         let left_node = binary_heap.pop().unwrap();
@@ -118,7 +118,7 @@ fn generate_huffman_tree(binary_heap: &mut BinaryHeap<HuffmanTree>) {
     }
 }
 
-fn generate_huffman(frequency_table: HashMap<char, i32>) -> Option<HuffmanTree> {
+fn generate_huffman_tree(frequency_table: &HashMap<char, i32>) -> Option<HuffmanTree> {
     let mut binary_heap: BinaryHeap<HuffmanTree> = BinaryHeap::new(); //priority queue
 
     for (char, count) in frequency_table.iter() {
@@ -126,7 +126,7 @@ fn generate_huffman(frequency_table: HashMap<char, i32>) -> Option<HuffmanTree> 
         binary_heap.push(huffman_tree_leaf);
     }
 
-    generate_huffman_tree(&mut binary_heap);
+    build_tree(&mut binary_heap);
 
     let huffman_tree = binary_heap.pop();
     huffman_tree
@@ -167,7 +167,7 @@ fn main() {
 
     let frequency_table = generate_frequency_table(&input_string);
 
-    let huffman_tree = generate_huffman(frequency_table).unwrap();
+    let huffman_tree = generate_huffman_tree(&frequency_table).unwrap();
 
     let mut encoding_table: BTreeMap<char, String> = BTreeMap::new();
     generate_huffman_code(&huffman_tree, &mut encoding_table, String::new());
