@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BinaryHeap, HashMap};
 use std::env::args;
 mod config;
 use config::Config;
-use lib::encode_text;
+use lib::{encode_text, pack_bits, unpack_bits};
 
 mod lib;
 
@@ -24,18 +24,19 @@ fn main() {
     let frequency_table = lib::generate_frequency_table(&input_string);
 
     let huffman_tree = lib::generate_huffman_tree(&frequency_table).unwrap();
+    println!("huffman tree{:?}", huffman_tree);
 
-    let mut encoding_table: BTreeMap<char, String> = BTreeMap::new();
-    lib::generate_huffman_code(&huffman_tree, &mut encoding_table, String::new());
+    let encoding_table = lib::generate_huffman_code(&huffman_tree);
+    println!("encoding_table  beofre {:?}", encoding_table);
 
+    let (encoded_string, length) = encode_text(&input_string, &encoding_table);
+    println!("encoded_text   {}", encoded_string);
+    println!("length  {}", length);
 
-    let encoded_text = encode_text(&input_string, &encoding_table);
-
-    let serialized_data = lib::serialize_tree(&huffman_tree);
-    lib::write_output(&config.output, &serialized_data, &encoded_text);
-
+    lib::write_output(&config.output, &huffman_tree, &encoded_string, length);
 
     let deserialized_data = lib::read_output(&config.output);
 
-    let deserialized_tree = lib::deserialize_tree(&deserialized_data);      
+    // let deserialized_tree = lib::deserialize_tree(&deserialized_data);
+    // println!("deserialized tree    {:?}", deserialized_tree);
 }

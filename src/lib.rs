@@ -15,7 +15,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process::Output;
 
-const DELIMITER: &[u8] = b"__END__";
+const DELIMITER: u8 = 0xFF; // Delimiter to separate tree from compressed data
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum HuffmanTree {
@@ -131,83 +131,85 @@ pub fn generate_huffman_tree(frequency_table: &HashMap<char, i32>) -> Option<Huf
     huffman_tree
 }
 
-pub fn generate_huffman_code(
-    huffman_tree: &HuffmanTree,
-    encoding_table: &mut BTreeMap<char, String>,
-    prefix: String,
-) {
-    match huffman_tree {
-        HuffmanTree::LeafNode { weight, element } => {
-            encoding_table.insert(*element, prefix);
-        }
-        HuffmanTree::InternalNode {
-            weight,
-            right,
-            left,
-        } => {
-            generate_huffman_code(&left, encoding_table, prefix.clone() + "0");
-            generate_huffman_code(&right, encoding_table, prefix + "1");
+pub fn generate_huffman_code(huffman_tree: &HuffmanTree) -> BTreeMap<char, String> {
+    fn recurse(
+        huffman_tree: &HuffmanTree,
+        encoding_table: &mut BTreeMap<char, String>,
+        prefix: String,
+    ) {
+        match huffman_tree {
+            HuffmanTree::LeafNode { weight, element } => {
+                encoding_table.insert(*element, prefix);
+            }
+            HuffmanTree::InternalNode {
+                weight,
+                right,
+                left,
+            } => {
+                recurse(&left, encoding_table, prefix.clone() + "0");
+                recurse(&right, encoding_table, prefix + "1");
+            }
         }
     }
+
+    let mut encoding_table: BTreeMap<char, String> = BTreeMap::new();
+
+    recurse(huffman_tree, &mut encoding_table, String::new());
+    encoding_table
 }
 
-pub fn encode_text(string: &String, encoding_table: &BTreeMap<char, String>) -> String {
+pub fn encode_text(string: &String, encoding_table: &BTreeMap<char, String>) -> (String, usize) {
     let mut encoded_string = String::new();
 
     for char in string.chars() {
         let s = encoding_table.get(&char).unwrap();
         encoded_string.push_str(s);
     }
-    encoded_string
+    let length = encoded_string.len();
+
+    (encoded_string, length)
 }
 
-fn pack_bits(bit_str: &str) -> Vec<u8> {
+pub fn pack_bits(bit_str: &str, length: usize) -> Vec<u8> {
     // Calculate the number of bytes needed
     let num_bytes = (bit_str.len() + 7) / 8;
 
     // Initialize a vector to store the bytes
-    let mut bytes = vec![0u8; num_bytes];
+    let mut bytes = vec![0u8; num_bytes + 4]; //extra 4 bytes for length
+
+    //store length as 4 bytes
+    let length_bytes = (length as u32).to_be_bytes();
+    bytes[..4].copy_from_slice(&length_bytes);
 
     // Iterate over the bit string and fill the bytes vector
     for (i, c) in bit_str.chars().enumerate() {
         if c == '1' {
             // Determine the byte index and bit position within the byte
-            let byte_index = i / 8;
-            let bit_position = 7 - (i % 8);
+            let byte_index = (i + 32) / 8;
+            let bit_position = 7 - ((i + 32) % 8);
             bytes[byte_index] |= 1 << bit_position;
         }
     }
     bytes
 }
 
-pub fn unpack_bits(packed_bytes: &[u8]) -> Vec<u8> {
-    // This will hold the unpacked bytes
-    let mut unpacked_bytes = Vec::new();
+pub fn unpack_bits(packed_bytes: &[u8]) -> (String, usize) {
+    let length = u32::from_be_bytes(packed_bytes[..4].try_into().unwrap()) as usize;
+    let packed_data = &packed_bytes[4..];
 
-    // Calculate the total number of bits to process
-    let total_bits = packed_bytes.len() * 8;
+    let mut bit_str = String::new();
 
-    // Iterate over all bits in packed bytes
-    for bit_pos in 0..total_bits {
-        // Determine the index of the byte and bit position within that byte
-        let byte_index = bit_pos / 8;
-        let bit_index = bit_pos % 8;
-
-        // Extract the bit from the packed bytes
-        let bit = (packed_bytes[byte_index] >> (7 - bit_index)) & 1;
-
-        // Append the bit to the appropriate byte in unpacked_bytes
-        if bit_pos % 8 == 0 {
-            // Start a new byte if necessary
-            unpacked_bytes.push(0);
+    for byte in packed_data {
+        for bit_pos in (0..8).rev() {
+            let bit = (byte >> bit_pos) & 1;
+            bit_str.push(if bit == 1 { '1' } else { '0' });
         }
-
-        // Calculate the position within the current byte in unpacked_bytes
-        let unpacked_byte_index = unpacked_bytes.len() - 1;
-        unpacked_bytes[unpacked_byte_index] |= bit << (7 - (bit_pos % 8));
     }
 
-    unpacked_bytes
+    // Adjust the length of the bit string
+    bit_str.truncate(length);
+
+    (bit_str, length)
 }
 
 pub fn serialize_tree(huffman_tree: &HuffmanTree) -> Vec<u8> {
@@ -221,22 +223,59 @@ pub fn deserialize_tree(serialized_tree: &Vec<u8>) -> HuffmanTree {
     deserialized_tree
 }
 
-pub fn write_output(output: &String, serialized_tree: &Vec<u8>, encoded_text: &String) {
+pub fn write_output(
+    output: &String,
+    huffman_tree: &HuffmanTree,
+    encoded_data: &str,
+    length: usize,
+) {
     let output_path = Path::new(output);
-
     let mut output_file = File::create(output_path).unwrap();
 
+    let serialized_tree = serialize_tree(huffman_tree);
+
     output_file.write_all(&serialized_tree).unwrap();
+    output_file.write_all(&[DELIMITER]).unwrap();
 
-    output_file.write_all(DELIMITER).unwrap();
-
-    output_file.write_all(encoded_text.as_bytes()).unwrap();
+    let packed_bytes = pack_bits(encoded_data, length);
+    output_file.write_all(&packed_bytes).unwrap();
 }
 
 pub fn read_output(output: &String) -> Vec<u8> {
     let output_path = Path::new(output);
     let mut output_file = File::open(output_path).unwrap();
-    let mut v: Vec<u8> = Vec::new();
-    output_file.read_to_end(&mut v).unwrap();
-    v
+
+    let mut contents: Vec<u8> = Vec::new();
+    output_file.read_to_end(&mut contents).unwrap();
+
+    let delimiter_pos = contents.iter().position(|&x| x == DELIMITER).unwrap();
+
+    let tree_bytes = &contents[..delimiter_pos];
+    let huffman_tree: HuffmanTree = bincode::deserialize(tree_bytes).unwrap();
+
+    let (bit_string, length) = unpack_bits(&contents[delimiter_pos + 1..]);
+
+    let s = decode_data(&bit_string, &huffman_tree);
+    println!(" s {}", s);
+
+    contents
+}
+
+fn decode_data(bit_string: &str, huffman_tree: &HuffmanTree) -> String {
+    let mut decoded_string = String::new();
+    let mut current_code = String::new();
+
+    let encoding_table = generate_huffman_code(huffman_tree);
+
+    let reverse_table: HashMap<String, char> =
+        encoding_table.into_iter().map(|(k, v)| (v, k)).collect();
+
+    for bit in bit_string.chars() {
+        current_code.push(bit);
+        if let Some(character) = reverse_table.get(&current_code) {
+            decoded_string.push(*character);
+            current_code.clear();
+        }
+    }
+    decoded_string
 }
